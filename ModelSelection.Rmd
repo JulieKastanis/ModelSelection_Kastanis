@@ -1,0 +1,335 @@
+<body style="background-color:lightblue;">
+
+
+---
+title: "Model Selection Assignment"
+output: html_document
+fig_width: 6 
+fig_height: 4 
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r library, include=FALSE}
+library(tidyverse)
+library(lme4)
+library(lmerTest)
+library(emmeans)
+library(performance)
+library(ggplot2)
+library(see)
+library(patchwork)
+library(pbkrtest)
+library(ggtext)
+library(asbio)
+library(ggfortify)
+library(bootstrap)
+library(GGally)
+library(MuMIn)
+```
+
+
+
+<center>![Figure 1. Spectrometer Setup](images/spectrometer.png){width=40%}</center>
+
+
+
+
+Spectrometry Terms;
+
+1.) Hue: color or shade. It has reddish hues. Degree to which a stimulus can be described as similar or different from described stimuli. Dependent on the dominant wavelength, independent of intensity or lightness. 
+
+2.) Chroma: the vividness or dullness of a color; how close the color is to either gray or the pure hue (red). Chroma describes how pure, or monochromatic, a color is compared to a white surface with the same illumination
+
+3.) Saturation: the degree of purity of a hue
+
+4.) Spectral purity: quantification of the monochromaticity of a given light sample; stability of a signal; how clean a spectrum is compared to what it should be. 
+
+5.) Brightness: measures the ability to of a sample to reflect blue light; lower brightness values mean greater pigmentation; measures the reflection of a very specific wavelength of light. 
+
+6.) Spectral Whiteness: Measures the ability to reflect all colors of light….remember things like sand reflect light; measures the reflection of all wavelengths of light across the visible spectrum thus this measure is more in line without visual perception.
+
+7.) A tint is created when any saturated hue on a spectrum is mixed with white to form a lighter color. 
+
+
+
+
+<center>![Figure 2. Southern Redbelly Dace (Chrosomus erythrogaster)](images/chrosomus-erythrogaster.jpg){width=80%}</center>
+
+
+
+
+```{r read color_data}
+color_data <- read.csv("color_data.csv")
+```
+
+
+
+```{r ggpairs_GSI}
+ggpairs(color_data, columns = 2:5) + theme_bw()
+```
+
+
+
+```{r correlation_matrix}
+correlation.matrix <- cor(color_data[,2:5])
+round(correlation.matrix, 2)
+```
+Correlation between the variables.
+Anything above ~0.5 we should look at.
+
+options(na.action = "na.fail")
+
+options(width = 90)
+
+
+
+Now running lm with additive effects of the variables in relation to GSI_Value.
+```{r model_wash1}
+model_GSI1 <- lm(GSI_Value ~ Red_Coloration_Area + Whiteness_Avg + Chroma_Avg + Tint_Avg, data=color_data)
+anova (model_GSI1) 
+```
+
+```{r performance_check_model_wash1}
+performance::check_collinearity(model_GSI1)
+```
+Red Coloration Area has a VIF <5 showing low correlation with other predictors. 
+
+
+Dredge out models from the previous linear model for EXPLORATORY PURPOSE ONLY.
+```{r dredge_modelwash1}
+options(na.action = "na.fail") # otherwise blows up with NA values
+dredge_GSI<-dredge(model_GSI1)
+
+dredge_GSI
+```
+Here we see there are 16 possible models based on additive combinations of the variables.
+
+
+Let's dredge models for a delta <2/ within two AICc units.
+```{r subset_dredge} 
+subset(dredge_GSI, delta <2)
+```
+Model 1 is about 1.8 times more likely than model 5 and model 9 (0.338/0.188) and (0.338/0.187). 
+Model 1 is about 2.33 times more likely than model 3 (0.338/0.145). 
+Model 1 is about 2.38 times more likely than model 2.  
+
+*Model 5 has support for tint average, model 9 has support for whiteness average, model 3 has support for red coloration area, and model 2 has support for chroma average. 
+
+
+Now let's rank variables support in the models above. This calculates variable importance weights.
+```{r importance(dredge_wash}
+importance(dredge_GSI)
+```
+The results of importance show that each of the four variables show up 8 times in the models.
+
+
+
+Based on the effects of variables in the models using subset(dredge_wash, delta <2) and some other combinations, I ran the following lm:
+
+```{r model_selection_table_GSI_Value}
+model1 <- lm(GSI_Value~Chroma_Avg+Red_Coloration_Area, data = color_data)
+model2 <- lm(GSI_Value~Whiteness_Avg+Chroma_Avg, data = color_data)
+model3 <- lm(GSI_Value~Red_Coloration_Area+Tint_Avg, data = color_data)
+model4 <- lm(GSI_Value~Whiteness_Avg+Chroma_Avg+Tint_Avg, data= color_data)
+model5 <- lm(GSI_Value~ Whiteness_Avg+Tint_Avg, data= color_data)
+model6 <- lm(GSI_Value~ Tint_Avg, data= color_data)
+model7 <- lm(GSI_Value~ Whiteness_Avg, data= color_data)
+model8 <- lm(GSI_Value~Red_Coloration_Area, data= color_data)
+model9 <- lm(GSI_Value~ Chroma_Avg, data= color_data)
+```
+
+
+```{r model_selection_output_BodyCondition1}
+out.put4<-model.sel(model1,model2,model3, model4, model5, model6, model7, model8, model9)
+out.put4
+```
+
+Subset for output models, you can see that the models with one variable in them show the most support, with model 6 (y=GSI_Value and x=Tint) as the top model.
+```{r subset_bodyconditionfactor1}
+subset(out.put4, delta <2)
+```
+Model 6 is about 1 times more likely than model 7. Model 6 is about 1.30 times more likely than model 8. Model 6 is about 1.32 times more likely than model 9. 
+
+
+
+
+Now to average the models using the lm from out.put4
+```{r model_avg_GSI_Value}
+model.avg(out.put4, revised.var = TRUE)
+```
+
+```{r summary model_output}
+summary(model.avg(out.put4))
+```
+
+Term Codes for the variables: 1 = Chroma Average, 2 = Red Coloration Area, 3 =  Whiteness_Avg, and 4 = Tint_Avg.
+Look at component models: models 4, 3, 2, and 1 are within two AICc units. Notice interactions and additive representation of these variables leads to higher delta AICc values.
+The variables show high p-values. 
+From the estimate column, we see a positive effect of Tint_avg and Whiteness_avg and a negative effect of Red Coloration Area and Chroma_avg on GSI_Value. 
+Model 4 (y=GSI_Value and x=Tint_avg) shows most support.
+
+```{r ggplots, fig.width=5, fig.height=8}
+w1 <- ggplot(color_data, aes(Red_Coloration_Area, GSI_Value)) + 
+  geom_point() +
+  geom_smooth(method="lm")
+
+w2 <- ggplot(color_data, aes(Whiteness_Avg, GSI_Value)) + 
+  geom_point() +
+  geom_smooth(method="lm")
+
+w3 <- ggplot(color_data, aes(Chroma_Avg, GSI_Value)) + 
+  geom_point() +
+  geom_smooth(method="lm")
+
+w4 <- ggplot(color_data, aes(Tint_Avg, GSI_Value)) + 
+  geom_point() +
+  geom_smooth(method="lm")
+
+
+w1 / w2 / w3 / w4
+```
+
+
+
+
+
+![Figure 4. Southern Redbelly Dace (Chrosomus erythrogaster) Body Condition Measurments](images/SRBD.jpeg)
+
+```{r read body_condition, include=FALSE}
+body_condition_color <- read.csv("body_condition_color.csv")
+```
+
+```{r ggpairs_body_condition}
+ggpairs(body_condition_color, columns = 2:5) + theme_bw()
+```
+
+
+
+options(na.action = "na.fail")
+
+options(width = 90)
+
+```{r all_parms_bodycondition}
+Body_Condition.all.parms<-lm(Body_Condition_Factor ~ Red_Coloration_Area + Whiteness_Avg + Chroma_Avg + Tint_Avg, data = body_condition_color)
+anova(Body_Condition.all.parms)
+```
+
+```{r results_all_Parms_bodycondition}
+results1<-MuMIn::dredge(Body_Condition.all.parms) 
+
+results1
+```
+
+```{r subset_results_bodycondition}
+subset(results1, delta <3)
+```
+Model 1 is about 3.05 times more likely than model 9 (0.461/0.151). Model 9 shows an effect of Whiteness_avg. Model 5 shows an effect of Tint_avg. Model 2 shows an effect of Chroma_avg. Lastly, model 3 shows an effect of Red Coloration Area. 
+
+Model 9 shows the effect of Whiteness_avg. Model 5 shows the effect of Tint_avg. Model 2 shows the effect of Chroma_avg. Model 3 shows the effect of Red_Coloration_Area.
+
+
+```{r imporatnce_results_bodycondition}
+MuMIn::importance(results1)
+```
+
+Each variable has about the same weight. Each variable shows up in eight models.
+
+
+Based on the effects of variables in the models using subset(results1, delta <3) and some other additive combinations, I ran the following lm:
+```{r model_selection_table}
+mod1 <- lm(Body_Condition_Factor~Whiteness_Avg, data = body_condition_color)
+mod2 <- lm(Body_Condition_Factor~Tint_Avg, data = body_condition_color)
+mod3 <- lm(Body_Condition_Factor~Red_Coloration_Area, data = body_condition_color)
+mod4 <- lm(Body_Condition_Factor~Chroma_Avg, data=body_condition_color)
+mod5 <- lm(Body_Condition_Factor~Whiteness_Avg+Chroma_Avg+Tint_Avg, data=body_condition_color)
+```
+
+```{r model_selection_output_BodyCondition}
+out.put_modelselection<-model.sel(mod1,mod2,mod3, mod4, mod5)
+out.put_modelselection
+```
+
+```{r subset_bodyconditionfactor, out.width="50%"}
+subset(out.put_modelselection, delta <2)
+```
+Model 1 is about 1.13 times more likely than model 2. Model 1 is about 1.18 times more likely than model 4. Lastly, Model 1 is about 1.2 times more likely than model 3.
+
+
+
+Now to average the models
+```{r model_avg_Body_Condition_Factor}
+model.avg(out.put_modelselection, revised.var = TRUE)
+```
+
+```{r summary model_avg_Body_Condition_Factor}
+summary(model.avg(out.put_modelselection))
+```
+
+```{r ggplot_body_condition, fig.width=5, fig.height=8}
+BC1 <- ggplot(body_condition_color, aes(Red_Coloration_Area, Body_Condition_Factor)) + 
+  geom_point() +
+  geom_smooth(method="lm")
+
+BC2 <- ggplot(body_condition_color, aes(Whiteness_Avg, Body_Condition_Factor)) + 
+  geom_point() +
+  geom_smooth(method="lm")
+
+BC3 <- ggplot(body_condition_color, aes(Chroma_Avg, Body_Condition_Factor)) + 
+  geom_point() +
+  geom_smooth(method="lm")
+
+BC4 <- ggplot(body_condition_color, aes(Tint_Avg, Body_Condition_Factor)) + 
+  geom_point() +
+  geom_smooth(method="lm")
+
+BC1 / BC2 / BC3 / BC4
+
+```
+
+
+
+
+
+
+
+
+
+
+
+#Select models using Royall's 1/8 rule for strength of evidence
+# IMPORTANT: Weights have been renormalized!!
+```{r subset_one-eighth}
+subset(out.put_modelselection, 1/8 < weight/max(out.put_modelselection$weight))
+```
+
+#
+```{r subset1/8_renormalized}
+subset(out.put_modelselection, cumsum(out.put_modelselection$weight) <= .95)
+```
+
+```{r sle_table2}
+sel.table2<-as.data.frame(out.put_modelselection)[6:10]
+
+sel.table2
+```
+
+```{r sel.table_2}
+sel.table2[,2:3]<- round(sel.table2[,2:3],2)
+sel.table2[2,4:5]<- round(sel.table2[,4:5],3)
+sel.table2[,2:3]
+```
+
+names(sel.table)[1] = "K"
+
+## lets be sure to put the model names in a column
+```{r sel.table}
+sel.table2$Model<-rownames(sel.table2)
+```
+
+
+
+
